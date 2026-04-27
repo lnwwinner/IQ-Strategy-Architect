@@ -17,7 +17,12 @@ export default function App() {
   const [balance, setBalance] = useState(1000);
   const [stats, setStats] = useState({ profit: 0, winRate: 0, trades: 0, wins: 0 });
   const [pendingTrade, setPendingTrade] = useState<any>(null);
+  const [trades, setTrades] = useState<any[]>([]);
   const intervalRef = useRef<NodeJS.Timeout>();
+
+  useEffect(() => {
+    fetch('/api/trades').then(res => res.json()).then(setTrades);
+  }, []);
 
   useEffect(() => {
     if (isRunning) {
@@ -128,6 +133,32 @@ export default function App() {
           </div>
           <p className="text-3xl font-bold">${balance.toFixed(2)}</p>
         </motion.div>
+      </div>
+      
+      <div className="mt-8 bg-gray-900 border border-gray-800 p-6 rounded-xl">
+        <h2 className="text-xl font-bold mb-4">Past Trades</h2>
+        <table className="w-full text-left">
+          <thead>
+            <tr className="text-gray-400 border-b border-gray-800">
+              <th className="p-3">Timestamp</th>
+              <th className="p-3">Asset</th>
+              <th className="p-3">Direction</th>
+              <th className="p-3">Result</th>
+              <th className="p-3">Profit</th>
+            </tr>
+          </thead>
+          <tbody>
+            {trades.map((trade, i) => (
+              <tr key={i} className="border-b border-gray-800">
+                <td className="p-3">{trade.timestamp}</td>
+                <td className="p-3">{trade.asset}</td>
+                <td className="p-3">{trade.direction}</td>
+                <td className={`p-3 ${trade.result === 'WIN' ? 'text-green-500' : 'text-red-500'}`}>{trade.result}</td>
+                <td className="p-3">${trade.profit.toFixed(2)}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
       </div>
     </div>
   );

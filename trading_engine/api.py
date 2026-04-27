@@ -31,3 +31,10 @@ async def execute_trade(request: TradeRequest):
 @app.get("/api/status")
 async def get_status():
     return {"status": "running", "engine": "active"}
+
+@app.get("/api/trades")
+async def get_trades():
+    return [
+        {"timestamp": "2026-04-27T17:45:00Z", "asset": "EURUSD", "direction": "BUY", "result": "WIN", "profit": 40},
+        {"timestamp": "2026-04-27T17:40:00Z", "asset": "EURUSD", "direction": "SELL", "result": "LOSS", "profit": -50}
+    ]
