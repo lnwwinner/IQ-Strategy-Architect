@@ -1,0 +1,10 @@
+# Trading Engine Dependencies
+fastapi
+uvicorn
+pandas
+numpy
+ta-lib
+tensorflow
+requests
+python-dotenv
+scikit-learn

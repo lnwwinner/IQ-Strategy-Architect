@@ -16,15 +16,13 @@ export default function App() {
   const [isRunning, setIsRunning] = useState(false);
   const [balance, setBalance] = useState(1000);
   const [stats, setStats] = useState({ profit: 0, winRate: 0, trades: 0, wins: 0 });
+  const [pendingTrade, setPendingTrade] = useState<any>(null);
   const intervalRef = useRef<NodeJS.Timeout>();
 
   useEffect(() => {
     if (isRunning) {
       const dataEngine = new DataEngine();
       const decisionEngine = new DecisionEngine();
-      const executionEngine = new ExecutionEngine();
-      const riskManagement = new RiskManagement();
-      const logger = new Logger();
       const priceHistory: number[] = [50, 52, 48, 51, 49, 50, 53, 47];
 
       intervalRef.current = setInterval(async () => {
@@ -34,35 +32,49 @@ export default function App() {
 
         const signal = decisionEngine.generateSignal(priceHistory);
         if (signal) {
-          const amount = riskManagement.calculatePositionSize(balance, 0.05);
-          const success = await executionEngine.executeTrade(data.asset, signal.direction, amount);
-          
-          const profit = success ? amount * 0.8 : -amount;
-          
-          setBalance(prev => prev + profit);
-          setStats(prev => ({
-            profit: prev.profit + profit,
-            trades: prev.trades + 1,
-            wins: success ? prev.wins + 1 : prev.wins,
-            winRate: success ? (prev.wins + 1) / (prev.trades + 1) * 100 : prev.wins / (prev.trades + 1) * 100
-          }));
-
-          logger.logTrade({
-            timestamp: new Date().toISOString(),
+          // Ask for confirmation
+          setPendingTrade({
             asset: data.asset,
             direction: signal.direction,
-            entryPrice: data.price,
-            exitPrice: data.price,
-            result: success ? 'WIN' : 'LOSS',
-            profit
+            amount: 50, // Static for now
+            price: data.price
           });
+          clearInterval(intervalRef.current); // Pause until confirmed
         }
       }, 2000);
     } else {
       clearInterval(intervalRef.current);
     }
     return () => clearInterval(intervalRef.current);
-  }, [isRunning, balance]);
+  }, [isRunning]);
+
+  const confirmTrade = async () => {
+    const executionEngine = new ExecutionEngine();
+    const logger = new Logger();
+    const success = await executionEngine.executeTrade(pendingTrade.asset, pendingTrade.direction, pendingTrade.amount);
+    
+    const profit = success ? pendingTrade.amount * 0.8 : -pendingTrade.amount;
+    
+    setBalance(prev => prev + profit);
+    setStats(prev => ({
+      profit: prev.profit + profit,
+      trades: prev.trades + 1,
+      wins: success ? prev.wins + 1 : prev.wins,
+      winRate: success ? (prev.wins + 1) / (prev.trades + 1) * 100 : prev.wins / (prev.trades + 1) * 100
+    }));
+
+    logger.logTrade({
+      timestamp: new Date().toISOString(),
+      asset: pendingTrade.asset,
+      direction: pendingTrade.direction,
+      entryPrice: pendingTrade.price,
+      exitPrice: pendingTrade.price,
+      result: success ? 'WIN' : 'LOSS',
+      profit
+    });
+    setPendingTrade(null);
+    setIsRunning(true); // Restart engine
+  };
 
   return (
     <div className="min-h-screen bg-gray-950 text-white p-6">
@@ -76,11 +88,21 @@ export default function App() {
             {isRunning ? <StopCircle size={20} /> : <Play size={20} />}
             {isRunning ? 'Stop System' : 'Start System'}
           </button>
-          <button className="p-2 bg-gray-800 rounded-lg hover:bg-gray-700">
-            <Settings size={20} />
-          </button>
         </div>
       </header>
+
+      {pendingTrade && (
+        <div className="fixed inset-0 bg-black/80 flex items-center justify-center p-6 z-50">
+          <div className="bg-gray-900 border border-gray-800 p-8 rounded-xl max-w-sm w-full">
+            <h2 className="text-xl font-bold mb-4">Confirm Trade</h2>
+            <p className="mb-6">Execute {pendingTrade.direction} for {pendingTrade.asset} at ${pendingTrade.price.toFixed(2)}?</p>
+            <div className="flex justify-end gap-4">
+              <button onClick={() => setPendingTrade(null)} className="px-4 py-2 bg-gray-800 rounded-lg">Cancel</button>
+              <button onClick={confirmTrade} className="px-4 py-2 bg-blue-600 rounded-lg font-bold">Confirm</button>
+            </div>
+          </div>
+        </div>
+      )}
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
         <motion.div className="bg-gray-900 border border-gray-800 p-6 rounded-xl">
