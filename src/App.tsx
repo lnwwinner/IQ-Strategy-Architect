@@ -1,0 +1,112 @@
+/**
+ * @license
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
+import { useState, useEffect, useRef } from 'react';
+import { motion } from 'motion/react';
+import { LineChart, BarChart3, Settings, Play, StopCircle } from 'lucide-react';
+import { DataEngine } from './services/dataEngine';
+import { DecisionEngine } from './services/decisionEngine';
+import { ExecutionEngine } from './services/executionEngine';
+import { RiskManagement } from './services/riskManagement';
+import { Logger } from './services/logger';
+
+export default function App() {
+  const [isRunning, setIsRunning] = useState(false);
+  const [balance, setBalance] = useState(1000);
+  const [stats, setStats] = useState({ profit: 0, winRate: 0, trades: 0, wins: 0 });
+  const intervalRef = useRef<NodeJS.Timeout>();
+
+  useEffect(() => {
+    if (isRunning) {
+      const dataEngine = new DataEngine();
+      const decisionEngine = new DecisionEngine();
+      const executionEngine = new ExecutionEngine();
+      const riskManagement = new RiskManagement();
+      const logger = new Logger();
+      const priceHistory: number[] = [50, 52, 48, 51, 49, 50, 53, 47];
+
+      intervalRef.current = setInterval(async () => {
+        const data = await dataEngine.fetchMarketData('EURUSD');
+        priceHistory.push(data.price);
+        if (priceHistory.length > 20) priceHistory.shift();
+
+        const signal = decisionEngine.generateSignal(priceHistory);
+        if (signal) {
+          const amount = riskManagement.calculatePositionSize(balance, 0.05);
+          const success = await executionEngine.executeTrade(data.asset, signal.direction, amount);
+          
+          const profit = success ? amount * 0.8 : -amount;
+          
+          setBalance(prev => prev + profit);
+          setStats(prev => ({
+            profit: prev.profit + profit,
+            trades: prev.trades + 1,
+            wins: success ? prev.wins + 1 : prev.wins,
+            winRate: success ? (prev.wins + 1) / (prev.trades + 1) * 100 : prev.wins / (prev.trades + 1) * 100
+          }));
+
+          logger.logTrade({
+            timestamp: new Date().toISOString(),
+            asset: data.asset,
+            direction: signal.direction,
+            entryPrice: data.price,
+            exitPrice: data.price,
+            result: success ? 'WIN' : 'LOSS',
+            profit
+          });
+        }
+      }, 2000);
+    } else {
+      clearInterval(intervalRef.current);
+    }
+    return () => clearInterval(intervalRef.current);
+  }, [isRunning, balance]);
+
+  return (
+    <div className="min-h-screen bg-gray-950 text-white p-6">
+      <header className="flex justify-between items-center mb-8 border-b border-gray-800 pb-4">
+        <h1 className="text-2xl font-bold font-sans">IQ Strategy Architect</h1>
+        <div className="flex gap-4">
+          <button 
+            onClick={() => setIsRunning(!isRunning)}
+            className={`flex items-center gap-2 px-4 py-2 rounded-lg font-medium transition ${isRunning ? 'bg-red-600 hover:bg-red-700' : 'bg-green-600 hover:bg-green-700'}`}
+          >
+            {isRunning ? <StopCircle size={20} /> : <Play size={20} />}
+            {isRunning ? 'Stop System' : 'Start System'}
+          </button>
+          <button className="p-2 bg-gray-800 rounded-lg hover:bg-gray-700">
+            <Settings size={20} />
+          </button>
+        </div>
+      </header>
+
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+        <motion.div className="bg-gray-900 border border-gray-800 p-6 rounded-xl">
+          <div className="flex items-center gap-3 mb-4">
+            <LineChart className="text-blue-500" />
+            <h2 className="font-semibold">Profit/Loss</h2>
+          </div>
+          <p className={`text-3xl font-bold ${stats.profit >= 0 ? 'text-green-500' : 'text-red-500'}`}>${stats.profit.toFixed(2)}</p>
+        </motion.div>
+
+        <motion.div className="bg-gray-900 border border-gray-800 p-6 rounded-xl">
+          <div className="flex items-center gap-3 mb-4">
+            <BarChart3 className="text-green-500" />
+            <h2 className="font-semibold">Win Rate</h2>
+          </div>
+          <p className="text-3xl font-bold">{stats.winRate.toFixed(2)}%</p>
+        </motion.div>
+
+        <motion.div className="bg-gray-900 border border-gray-800 p-6 rounded-xl">
+          <div className="flex items-center gap-3 mb-4">
+            <Settings className="text-yellow-500" />
+            <h2 className="font-semibold">Balance</h2>
+          </div>
+          <p className="text-3xl font-bold">${balance.toFixed(2)}</p>
+        </motion.div>
+      </div>
+    </div>
+  );
+}
